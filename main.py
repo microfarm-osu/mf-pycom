@@ -77,11 +77,11 @@ def uploadData(data):
 
     #spliced = [data[i] for i in (0, 10, 11, 12, 13, 14, 15, 16, 17)]
     spliced = [data[i] for i in range(len(data))] # Send all
-    print('Sending>',end='',flush=True)
+    #print('Sending>',end='',flush=True)
     #for i_data in spliced:
     #    print(i_data,end='',flush=True)
     #    s.send(bytes(i_data))
-    print(bytes(tuple(spliced)),end='',flush=True)
+    #print(bytes(tuple(spliced)),end='',flush=True)
     s.setblocking(True)
     try:
         s.send(bytes(tuple(spliced)))
@@ -89,7 +89,7 @@ def uploadData(data):
         print('Operation Failed...')
     s.setblocking(False)
 
-    print('')
+    #print('')
     pycom.rgbled(0x001003)
     time.sleep(0.10);
 
@@ -99,7 +99,7 @@ def uploadData(data):
 #   send command (get data command = 0xA0)
 def readSeesaws(currentSeesaw):
     success = False
-    print('Requesting Info From Arduino')
+    #print('Requesting Info From Arduino')
     # START COMMAND
     arduinoUART.write(bytes([0xF0]))
     # ADDRESS
@@ -119,7 +119,7 @@ def readSeesaws(currentSeesaw):
             #resultBuf = ustruct.unpack('BHffbb', binascii.unhexlify(sawBuf))
             try:
                 data = struct.unpack(seesawDataFormat, sawBuf)# binascii.unhexlify(sawBuf)
-                print('Result:', data)
+                #print('Result:', data)
                 uploadData(sawBuf);
                 success = True
             except ValueError:
@@ -129,13 +129,44 @@ def readSeesaws(currentSeesaw):
     #print('SUCCESS?', success)
     return success
 
+# Test Transmissions (Send and Receive)
+'''
+while(True):
+    s.setblocking(True)
+    s.send(bytes([0x23]))
+    s.setblocking(False)
+    print(s.recv(64))
+    time.sleep(1)
+'''
+
 currentSeesaw = 0
 while(True):
     pycom.rgbled(0x100000)
-    print('Gateway says: ',s.recv(64))
+    msg = s.recv(64)
+    if(msg != b''):
+        print('Gateway says: ',msg)
+        arduinoUART.write(msg)
+
     if readSeesaws(currentSeesaw):
         currentSeesaw = currentSeesaw + 1
         if currentSeesaw > 5:
             currentSeesaw = 0
-    time.sleep(1)
-    # Code at the indent happens every 10 seconds
+    time.sleep(6)
+    pycom.rgbled(0x000020)
+    # About 7 seconds of delay per upload
+    #   Keeps us from exceeding 5000/hr variable upload rate limit
+    #   that is imposed by the Tago.io website
+    # Tago.io also has 500,000 variable limit... this means that
+    #   at this max rate we could hold 100 hours
+    # Lets extend the range of time we can have:
+    #   Want a month of data: 30*24 = 720 hours
+    # So the delay needs to be increased 7 times!
+    #   This is only 1 upload of a single seesaw per 49 seconds
+    #   Takes several minutes to update just the 6 seesaws!
+    # WARNING: LoRaWAN waits for a transmission from this to send us any downstream data
+    #   ---- THIS DELAY IS ALSO DELAYING DOWNSTREAM COMMANDS!
+    #       So each downstream command will be delayed a minute!
+    time.sleep(42) # Slow rate so tago.io will hold a month's worth of data
+
+    # For testing, lets use a doubled delay, instead of 7x:
+    #time.sleep(7)
